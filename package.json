@@ -14,6 +14,7 @@
     "js-yaml": "^4.1.0",
     "lodash.find": "^4.6.0",
     "memoizee": "^0.4.15",
+    "openai": "^4.67.1",
     "react": "18.2.0",
     "react-color": "^2.19.3",
     "react-document-title": "^2.0.3",

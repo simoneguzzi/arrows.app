@@ -4,10 +4,12 @@ import {
   Button,
   Modal,
   Form,
+  MessageItemProps,
+  Segment,
   TextArea,
   Message,
-  MessageItemProps,
 } from 'semantic-ui-react';
+import OpenAI from 'openai';
 
 interface ImportModalProps {
   onCancel: () => void;
@@ -21,7 +23,11 @@ interface ImportModalProps {
 }
 
 interface ImportModalState {
+  client: OpenAI;
   errorMessage?: string;
+  prompt: string;
+  showGpt: boolean;
+  gptLoading: boolean;
   text: string;
   messageProps: MessageItemProps;
 }
@@ -31,6 +37,13 @@ class ImportModal extends Component<ImportModalProps, ImportModalState> {
     super(props);
     this.state = {
       text: '',
+      prompt: '',
+      showGpt: false,
+      client: new OpenAI({
+        apiKey: import.meta.env.VITE_OPENAI_API_KEY,
+        dangerouslyAllowBrowser: true,
+      }),
+      gptLoading: false,
       errorMessage: undefined,
       messageProps: {
         icon: 'checkmark',
@@ -118,6 +131,31 @@ class ImportModal extends Component<ImportModalProps, ImportModalState> {
     }
   };
 
+  generate = async () => {
+    this.setState({ gptLoading: true });
+    const threadId = await import.meta.env.VITE_OPENAI_API_THREAD_ID;
+    await this.state.client.beta.threads.messages.create(threadId, {
+      content: this.state.prompt,
+      role: 'user',
+    });
+    const run = await this.state.client.beta.threads.runs.createAndPoll(
+      threadId,
+      {
+        stream: false,
+        assistant_id: await import.meta.env.VITE_OPENAI_API_ASSISTANT_ID,
+      }
+    );
+    if (run.status === 'completed') {
+      const messages = await this.state.client.beta.threads.messages.list(
+        run.thread_id
+      );
+      const text = messages.data[0].content[0].text.value;
+      this.setState({ text });
+      this.validateText(text);
+    }
+    this.setState({ gptLoading: false });
+  };
+
   render() {
     return (
       <Modal
@@ -159,9 +197,36 @@ class ImportModal extends Component<ImportModalProps, ImportModalState> {
                 hidden
                 onChange={this.fileChange}
               />
+              <Button
+                content="GPT"
+                labelPosition="left"
+                icon="chat"
+                onClick={() => this.setState({ showGpt: !this.state.showGpt })}
+              />
             </Form.Field>
+            {this.state.showGpt && (
+              <Segment
+                style={{
+                  boxShadow: 'none',
+                }}
+                loading={this.state.gptLoading}
+              >
+                <TextArea
+                  style={{
+                    fontFamily: 'monospace',
+                    marginBottom: 8,
+                  }}
+                  onChange={(event) =>
+                    this.setState({ prompt: event.target.value })
+                  }
+                />
+                <Button secondary onClick={this.generate}>
+                  Generate
+                </Button>
+              </Segment>
+            )}
             <TextArea
-              placeholder="Choose a file, or paste text here..."
+              placeholder="Choose a file, talk to the GPT, or paste text here..."
               style={{
                 height: 300,
                 fontFamily: 'monospace',
